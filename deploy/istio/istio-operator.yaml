@@ -1,0 +1,30 @@
+# GAIA-Server Istio Operator - v1.29.x + COMPLIANCE_POLICY=pqc
+# Per GAIA PQC Production Deployment Spec v1.0:
+#   - TLS 1.3 enforced
+#   - X25519MLKEM768 hybrid key exchange
+#   - COMPLIANCE_POLICY=pqc on pilot and proxies
+#   - Mesh mTLS STRICT mode
+#
+# NOTE: COMPLIANCE_POLICY=pqc is marked experimental by Istio.
+# Enabling it is necessary but not sufficient to claim PQC compliance.
+# ML-DSA-65 artifact-layer signatures are the authoritative PQ
+# authenticity layer for critical GAIA objects.
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: gaia-istio
+  namespace: istio-system
+spec:
+  tag: 1.29.0
+  meshConfig:
+    meshMTLS:
+      minProtocolVersion: TLSV1_3
+    defaultConfig:
+      proxyMetadata:
+        COMPLIANCE_POLICY: "pqc"
+  components:
+    pilot:
+      k8s:
+        env:
+          - name: COMPLIANCE_POLICY
+            value: "pqc"
