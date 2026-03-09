@@ -1,0 +1,9 @@
+# STRICT mTLS policy for the gaia-default namespace
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: gaia-strict-mtls
+  namespace: gaia-default
+spec:
+  mtls:
+    mode: STRICT

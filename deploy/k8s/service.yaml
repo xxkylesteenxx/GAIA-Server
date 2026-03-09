@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gaia-server
+  namespace: gaia-default
+  labels:
+    app: gaia-server
+spec:
+  type: ClusterIP
+  selector:
+    app: gaia-server
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+    - name: health
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
