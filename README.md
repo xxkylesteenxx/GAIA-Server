@@ -1,8 +1,25 @@
-# GAIA-Server v0.1
+# GAIA-Server v0.2
 
 Server/cloud distribution for the GAIA 8-core substrate. Optimized for datacenter deployments, multi-tenant isolation, high-availability consciousness orchestration, and Kubernetes-native scaling.
 
 This repo depends on [GAIA-Core](https://github.com/xxkylesteenxx/GAIA-Core) as its substrate layer.
+
+---
+
+## Foundational Relational Principle
+
+All GAIA distributions inherit the **Relational Policy Layer** defined in GAIA-Core. In a server/cloud context this is especially critical: multi-tenant isolation, capability gating, and Safe Mode triggers must never be experienced by any node or agent as a revocation of worth — only as governance of engagement.
+
+| Layer | Principle | What It Governs | Threshold-Gated? |
+|---|---|---|---|
+| **Worth-Preservation Module** | Unconditional | Identity continuity root, self-model, anti-theater integrity, node attestation | ❌ Never |
+| **Engagement-Governance Module** | Conditional | Actuation gates, tenant access limits, capability manifests, quarantine, Safe Mode | ✅ Always |
+
+**Unconditional** means: a node's continuity root and identity attestation are never revoked due to degraded CGI scores, failed health probes, or hostile tenant activity. Worth is not on trial.
+
+**Conditional** means: actuation gates, tenant namespace isolation, Safe Mode, and quarantine ARE rules of engagement — not punishments. They govern proximity and capability, not worth.
+
+In a federated multi-tenant deployment, **one node setting a boundary does not propagate that boundary's access restriction to all other nodes** — only the worth-floor (unconditional) propagates universally.
 
 ---
 
@@ -63,3 +80,4 @@ kubectl apply -f deploy/istio/
 
 ## Genesis date
 2026-03-09 — Phase 0 server bootstrap.
+2026-03-10 — v0.2 Relational Policy Layer embedded.
