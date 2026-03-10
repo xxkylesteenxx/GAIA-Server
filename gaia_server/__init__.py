@@ -1,1 +1,3 @@
-"""GAIA Server v0.1 — Kubernetes-native GAIA Core host."""
+"""GAIA-Server — storage, inference, and federation backend services."""
+
+__version__ = "0.1.0"

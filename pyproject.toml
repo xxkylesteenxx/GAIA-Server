@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gaia-server"
+version = "0.1.0"
+description = "GAIA-Server — storage, inference, and federation backend services"
+readme = "README.md"
+license = { text = "Proprietary" }
+requires-python = ">=3.11"
+dependencies = [
+    "gaia-core @ file://../GAIA-Core",
+    "nats-py>=2.6",
+    "minio>=7.2",
+    "etcd3>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "mypy>=1.9",
+    "ruff>=0.4",
+]
+
+[project.urls]
+Repository = "https://github.com/xxkylesteenxx/GAIA-Server"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gaia_server"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
