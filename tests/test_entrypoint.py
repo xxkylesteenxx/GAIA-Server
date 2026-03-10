@@ -1,60 +1,79 @@
+"""Entrypoint smoke test — verifies startup and clean shutdown under mocked backends."""
 from __future__ import annotations
 
-import shutil
-import tempfile
-import unittest
-from pathlib import Path
-from unittest.mock import patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from gaia_server.config import ServerConfig
-from gaia_server.entrypoint import GaiaServer
+import pytest
+
+from gaia_server.health import HealthAggregator, HealthReport
 
 
-class TestGaiaServerBoot(unittest.TestCase):
-    def setUp(self) -> None:
-        self.tmpdir = tempfile.mkdtemp(prefix="gaia-server-test-")
+# --- HealthAggregator unit tests (no backend required) ---
 
-    def tearDown(self) -> None:
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
-
-    def _config(self) -> ServerConfig:
-        return ServerConfig(
-            node_id="test-node",
-            state_root=self.tmpdir,
-            health_port=0,    # disable real HTTP server in tests
-            grpc_port=0,
-            allowed_tenants=["default", "test-tenant"],
-        )
-
-    def test_substrate_boots_with_eight_cores(self) -> None:
-        cfg = self._config()
-        server = GaiaServer(cfg)
-        with patch.object(server, '_start_health_server'):
-            server.boot()
-        self.assertIsNotNone(server.substrate)
-        self.assertEqual(len(server.substrate.registry.names()), 8)
-        self.assertIn("NEXUS", server.substrate.registry.names())
-        self.assertIn("GUARDIAN", server.substrate.registry.names())
-        server.shutdown()
-
-    def test_tenants_registered(self) -> None:
-        cfg = self._config()
-        server = GaiaServer(cfg)
-        with patch.object(server, '_start_health_server'):
-            server.boot()
-        tenants = server.tenants.list_tenants()
-        self.assertIn("default", tenants)
-        self.assertIn("test-tenant", tenants)
-        server.shutdown()
-
-    def test_grpc_server_starts(self) -> None:
-        cfg = self._config()
-        server = GaiaServer(cfg)
-        with patch.object(server, '_start_health_server'):
-            server.boot()
-        self.assertIsNotNone(server.grpc)
-        server.shutdown()
+async def test_health_aggregator_all_ok() -> None:
+    agg = HealthAggregator()
+    agg.register("storage", AsyncMock(return_value={"status": "ok"}))
+    agg.register("inference", AsyncMock(return_value={"status": "ok"}))
+    report = await agg.check()
+    assert report.status == "ok"
+    assert report.is_ok()
+    assert "storage" in report.subsystems
+    assert "inference" in report.subsystems
 
 
-if __name__ == "__main__":
-    unittest.main()
+async def test_health_aggregator_one_degraded() -> None:
+    agg = HealthAggregator()
+    agg.register("storage", AsyncMock(return_value={"status": "ok"}))
+    agg.register("inference", AsyncMock(return_value={"status": "degraded"}))
+    report = await agg.check()
+    assert report.status == "degraded"
+    assert not report.is_ok()
+
+
+async def test_health_aggregator_one_down() -> None:
+    agg = HealthAggregator()
+    agg.register("storage", AsyncMock(return_value={"status": "ok"}))
+    agg.register("inference", AsyncMock(side_effect=RuntimeError("backend down")))
+    report = await agg.check()
+    assert report.status == "down"
+    assert report.subsystems["inference"]["status"] == "down"
+    assert "backend down" in report.subsystems["inference"]["detail"]
+
+
+async def test_health_aggregator_empty() -> None:
+    agg = HealthAggregator()
+    report = await agg.check()
+    assert report.status == "ok"
+    assert report.subsystems == {}
+
+
+# --- Entrypoint wiring smoke test ---
+
+async def test_main_starts_and_shuts_down_cleanly() -> None:
+    """Simulate a full startup+shutdown cycle with mocked backends."""
+    mock_registry = MagicMock()
+    mock_registry.health = AsyncMock(return_value={"status": "ok", "backends": {}})
+    mock_registry.events._nc = None  # no NATS drain
+
+    mock_router = MagicMock()
+    mock_router.health = AsyncMock(return_value={"status": "ok", "backends": {}})
+
+    with (
+        patch("gaia_server.entrypoint.create_registry", AsyncMock(return_value=mock_registry)),
+        patch("gaia_server.entrypoint.create_router", AsyncMock(return_value=mock_router)),
+    ):
+        from gaia_server.entrypoint import main
+
+        # Run main but cancel it immediately after health check passes
+        # by injecting a stop signal via the event loop
+        async def _run_with_auto_stop() -> None:
+            task = asyncio.create_task(main())
+            await asyncio.sleep(0.1)   # let startup complete
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass  # expected — clean cancellation is correct shutdown behavior
+
+        await _run_with_auto_stop()

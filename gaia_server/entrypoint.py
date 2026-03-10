@@ -1,115 +1,95 @@
+"""GAIA-Server entrypoint — async main() wires all subsystems and holds the process alive.
+
+Startup sequence:
+    1. configure_logging()
+    2. create_registry()     — NATS + MinIO + etcd
+    3. create_router()       — inference backend
+    4. HealthAggregator.check()  — verify all backends reachable
+    5. Install SIGINT / SIGTERM handlers
+    6. Log startup complete
+    7. asyncio.Event().wait()  — hold alive until signal
+
+Shutdown sequence:
+    1. Signal received — set stop event
+    2. Log shutdown initiated
+    3. Drain NATS connection
+    4. Log shutdown complete
+    5. Exit 0
+"""
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
+import signal
+import sys
 
-from gaia_core.bootstrap import build_default_gaia
-from gaia_server.config import ServerConfig, DEFAULT_SERVER_CONFIG
-from gaia_server.ipc.grpc_server import GaiaGrpcServer
-from gaia_server.observability.telemetry import TelemetryCollector
-from gaia_server.tenancy.tenant_registry import TenantRegistry
+from gaia_server.health import HealthAggregator
+from gaia_server.inference.factory import create_router
+from gaia_server.logging_config import configure_logging
+from gaia_server.storage.factory import create_registry
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger("gaia_server")
 
 
-class HealthHandler(BaseHTTPRequestHandler):
-    """Minimal HTTP health/readiness handler for Kubernetes probes."""
+async def main() -> None:
+    configure_logging()
+    log.info("GAIA-Server starting")
 
-    substrate = None
+    # --- Wire storage ---
+    log.info("Initializing storage registry")
+    registry = await create_registry()
 
-    def do_GET(self):
-        if self.path in ("/healthz", "/readyz"):
-            body = json.dumps({"status": "ok", "node": self.server.node_id}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        else:
-            self.send_response(404)
-            self.end_headers()
+    # --- Wire inference ---
+    log.info("Initializing inference router")
+    router = await create_router()
 
-    def log_message(self, fmt, *args):  # suppress default HTTP logging
-        pass
+    # --- Health check ---
+    agg = HealthAggregator()
+    agg.register("storage", registry.health)
+    agg.register("inference", router.health)
 
-
-class GaiaServer:
-    def __init__(self, config: ServerConfig = DEFAULT_SERVER_CONFIG) -> None:
-        self.config = config
-        self.substrate = None
-        self.grpc = None
-        self.telemetry = None
-        self.tenants = None
-
-    def boot(self) -> None:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    report = await agg.check()
+    if report.is_ok():
+        log.info("Startup health check passed: %s", report.subsystems)
+    else:
+        log.warning(
+            "Startup health check status=%s subsystems=%s",
+            report.status,
+            report.subsystems,
         )
-        logger.info("GAIA-Server booting. node=%s cluster=%s",
-                    self.config.node_id, self.config.cluster_id)
+        if report.status == "down":
+            log.error("One or more critical subsystems are DOWN — aborting startup")
+            sys.exit(1)
 
-        # 1. Bootstrap GAIA-Core substrate
-        logger.info("Bootstrapping GAIA-Core substrate...")
-        self.substrate = build_default_gaia(Path(self.config.state_root))
-        logger.info("Substrate ready. cores=%s", self.substrate.registry.names())
+    # --- Signal handling ---
+    stop = asyncio.Event()
 
-        # 2. Start gRPC layer
-        logger.info("Starting gRPC server on port %d...", self.config.grpc_port)
-        self.grpc = GaiaGrpcServer(self.substrate, self.config)
-        self.grpc.start()
+    def _handle_signal(sig: signal.Signals) -> None:
+        log.info("Received signal %s — initiating graceful shutdown", sig.name)
+        stop.set()
 
-        # 3. Register tenants
-        logger.info("Initializing tenant registry...")
-        self.tenants = TenantRegistry(self.config)
-        for tenant in self.config.allowed_tenants:
-            self.tenants.register(tenant)
-        logger.info("Tenants registered: %s", self.tenants.list_tenants())
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, _handle_signal, sig)
 
-        # 4. Start observability
-        logger.info("Starting telemetry collector...")
-        self.telemetry = TelemetryCollector(self.substrate, self.config)
-        self.telemetry.start()
+    log.info("GAIA-Server ready")
 
-        # 5. Health server
-        logger.info("Starting health server on port %d...", self.config.health_port)
-        self._start_health_server()
+    # --- Hold alive ---
+    await stop.wait()
 
-        logger.info("GAIA-Server ready. identity=%s",
-                    self.substrate.identity.public_fingerprint)
-
-    def _start_health_server(self) -> None:
-        server = HTTPServer(("", self.config.health_port), HealthHandler)
-        server.node_id = self.config.node_id
-        t = threading.Thread(target=server.serve_forever, daemon=True)
-        t.start()
-
-    def shutdown(self) -> None:
-        logger.info("GAIA-Server shutting down...")
-        if self.grpc:
-            self.grpc.stop()
-        if self.telemetry:
-            self.telemetry.stop()
-        logger.info("GAIA-Server shutdown complete.")
+    # --- Graceful shutdown ---
+    log.info("GAIA-Server shutting down")
+    await _shutdown(registry)
+    log.info("GAIA-Server stopped")
 
 
-def main() -> None:
-    server = GaiaServer()
-    server.boot()
+async def _shutdown(registry: object) -> None:
+    """Drain connections gracefully."""
     try:
-        import signal, time
-        def _handler(sig, frame):
-            server.shutdown()
-        signal.signal(signal.SIGTERM, _handler)
-        signal.signal(signal.SIGINT, _handler)
-        while True:
-            time.sleep(5)
-    except SystemExit:
-        pass
-
-
-if __name__ == "__main__":
-    main()
+        # Drain NATS if the event store exposes the connection
+        nc = getattr(getattr(registry, "events", None), "_nc", None)
+        if nc is not None and hasattr(nc, "drain"):
+            await nc.drain()
+            log.debug("NATS connection drained")
+    except Exception as exc:
+        log.warning("Error during shutdown drain: %s", exc)
