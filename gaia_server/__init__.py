@@ -1,3 +1,6 @@
-"""GAIA-Server — storage, inference, and federation backend services."""
+"""GAIA-Server — storage, inference, and federation backend services.
 
-__version__ = "0.1.0"
+Sprint: Planetary State Propagation v1 — PlanetaryStateHub wired.
+"""
+
+__version__ = "0.2.0"

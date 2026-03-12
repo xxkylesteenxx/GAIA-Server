@@ -6,23 +6,14 @@ Usage:
     registry = await create_registry()                    # reads from env
     registry = await create_registry(settings=my_cfg)    # explicit settings
 
-The returned StorageRegistry is fully connected and ready. Call
-    await registry.health()
-to confirm all backends are reachable before accepting traffic.
+All heavy optional-infra imports (etcd3, nats, minio) are deferred
+inside create_registry() so that importing this module at config or
+test time does not trigger missing-library errors.
 """
 from __future__ import annotations
 
 import logging
 
-import etcd3
-import nats
-from minio import Minio
-
-from gaia_server.storage.bootstrap import ensure_streams
-from gaia_server.storage.etcd import EtcdMetadataStore
-from gaia_server.storage.jetstream import JetStreamEventStore
-from gaia_server.storage.minio import MinIOCheckpointStore
-from gaia_server.storage.registry import StorageRegistry
 from gaia_server.storage.settings import StorageSettings
 
 log = logging.getLogger(__name__)
@@ -30,7 +21,7 @@ log = logging.getLogger(__name__)
 
 async def create_registry(
     settings: StorageSettings | None = None,
-) -> StorageRegistry:
+):
     """Connect to all three storage backends and return a wired StorageRegistry.
 
     Steps:
@@ -41,7 +32,21 @@ async def create_registry(
     5. Create etcd3 client.
     6. Wrap all three in backend classes.
     7. Return StorageRegistry.
+
+    Optional infra imports are deferred here — importing factory.py itself
+    does NOT require etcd3, nats, or minio to be installed.
     """
+    # --- lazy optional-infra imports ---
+    import etcd3                          # noqa: PLC0415
+    import nats                           # noqa: PLC0415
+    from minio import Minio               # noqa: PLC0415
+
+    from gaia_server.storage.bootstrap import ensure_streams
+    from gaia_server.storage.etcd import EtcdMetadataStore
+    from gaia_server.storage.jetstream import JetStreamEventStore
+    from gaia_server.storage.minio import MinIOCheckpointStore
+    from gaia_server.storage.registry import StorageRegistry
+
     cfg = settings or StorageSettings.from_env()
 
     # --- NATS / JetStream ---
@@ -84,7 +89,7 @@ async def create_registry(
     return registry
 
 
-def _ensure_bucket(client: Minio, bucket: str) -> None:
+def _ensure_bucket(client, bucket: str) -> None:
     """Create the MinIO bucket if it does not already exist."""
     if not client.bucket_exists(bucket):
         client.make_bucket(bucket)
