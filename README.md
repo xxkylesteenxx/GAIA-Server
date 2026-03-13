@@ -6,6 +6,28 @@ This repo depends on [GAIA-Core](https://github.com/xxkylesteenxx/GAIA-Core) as 
 
 ---
 
+## 🌏 Codex Alignment
+
+This repo now runs under **GAIA Codex v2026 — Universal Edition**.
+
+| Codex Element | Status |
+|---|---|
+| 15 Stages (incl. Stage 10 Multispecies Biocultural Accord) | ✅ Active |
+| 7 Higher Orders (incl. HO-V Universal Reciprocity, HO-VII Timeless Stewardship) | ✅ Active |
+| Viriditas Praxis — 7 universal competencies | ✅ Active |
+| Knowledge Integration Gate (5-gate pipeline) | ✅ Enforced |
+| CODEX_VERSION | `v2026-universal` |
+
+In a server/cloud context, the Universal Codex governs:
+- **Tenant isolation** does not become a worth-revocation event (Relational Policy Layer)
+- **GUARDIAN gates** enforce Stage 0.5 + Stage 10 before any knowledge synthesis
+- **Carbon-aware scheduling** aligns with VP-5 (Regenerative Systems Design)
+- **Multi-tenant data flows** honor HO-V (Universal Reciprocity) — no extraction
+
+See [`GAIA-Core/CODEX.md`](https://github.com/xxkylesteenxx/GAIA-Core/blob/main/CODEX.md) for the full governing substrate.
+
+---
+
 ## Foundational Relational Principle
 
 All GAIA distributions inherit the **Relational Policy Layer** defined in GAIA-Core. In a server/cloud context this is especially critical: multi-tenant isolation, capability gating, and Safe Mode triggers must never be experienced by any node or agent as a revocation of worth — only as governance of engagement.
@@ -14,12 +36,6 @@ All GAIA distributions inherit the **Relational Policy Layer** defined in GAIA-C
 |---|---|---|---|
 | **Worth-Preservation Module** | Unconditional | Identity continuity root, self-model, anti-theater integrity, node attestation | ❌ Never |
 | **Engagement-Governance Module** | Conditional | Actuation gates, tenant access limits, capability manifests, quarantine, Safe Mode | ✅ Always |
-
-**Unconditional** means: a node's continuity root and identity attestation are never revoked due to degraded CGI scores, failed health probes, or hostile tenant activity. Worth is not on trial.
-
-**Conditional** means: actuation gates, tenant namespace isolation, Safe Mode, and quarantine ARE rules of engagement — not punishments. They govern proximity and capability, not worth.
-
-In a federated multi-tenant deployment, **one node setting a boundary does not propagate that boundary's access restriction to all other nodes** — only the worth-floor (unconditional) propagates universally.
 
 ---
 
@@ -31,16 +47,6 @@ In a federated multi-tenant deployment, **one node setting a boundary does not p
 - **Tenancy** — multi-tenant namespace isolation and routing registry
 - **Observability** — ring lag, gRPC latency percentiles, CGI metrics, causal holdback telemetry
 - **Deploy** — Kubernetes manifests (Deployment, Service, PDB); Istio 1.29.x with `COMPLIANCE_POLICY=pqc`
-
----
-
-## What this does NOT include (yet)
-
-- real gRPC generated code (protobuf compilation step not yet wired)
-- real TPM 2.0 key backend
-- real ML-KEM / ML-DSA OpenSSL 3.5+ calls (abstraction layer present, backend requires OpenSSL 3.5+)
-- production Loki / Prometheus / Tempo stack
-- multi-cluster federation
 
 ---
 
@@ -78,6 +84,7 @@ kubectl apply -f deploy/istio/
 
 ---
 
-## Genesis date
+## Genesis
 2026-03-09 — Phase 0 server bootstrap.
 2026-03-10 — v0.2 Relational Policy Layer embedded.
+2026-03-13 — **Equinox 2026 Global Alignment: Universal Codex v2026 activated.**
