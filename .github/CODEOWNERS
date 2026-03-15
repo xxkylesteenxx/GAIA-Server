@@ -1,0 +1,4 @@
+# GAIA-Server CODEOWNERS
+*                  @xxkylesteenxx
+gaia_server/       @xxkylesteenxx
+.github/           @xxkylesteenxx
